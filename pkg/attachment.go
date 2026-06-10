@@ -17,7 +17,7 @@
 package pst
 
 import (
-	"github.com/mooijtech/go-pst/v6/pkg/properties"
+	"github.com/msilvoso/go-pst/v6/pkg/properties"
 	"io"
 
 	"github.com/rotisserie/eris"

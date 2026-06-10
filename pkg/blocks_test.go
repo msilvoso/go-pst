@@ -22,7 +22,7 @@ import (
 	"io"
 	"testing"
 
-	pst "github.com/mooijtech/go-pst/v6/pkg"
+	pst "github.com/msilvoso/go-pst/v6/pkg"
 )
 
 // TestGetBlockReaderCompressed verifies that zlib compressed blocks (OST files,

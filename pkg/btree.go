@@ -163,7 +163,7 @@ func BTreeNodeLessFunc(a BTreeNode, b BTreeNode) bool {
 }
 
 // GetBTreeNodeRawEntries returns the raw b-tree node entries in bytes.
-// References https://github.com/mooijtech/go-pst/blob/master/docs/README.md#btpage
+// References https://github.com/msilvoso/go-pst/blob/master/docs/README.md#btpage
 // Used by GetBTreeNodeEntries.
 func (file *File) GetBTreeNodeRawEntries(btreeNodeOffset int64, callback func([]byte, error)) {
 	var outputBuffer []byte

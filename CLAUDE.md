@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-go-pst is a Go library for reading Microsoft Outlook PST/OST/PAB files (the PFF format). Module path is `github.com/mooijtech/go-pst/v6`; the library lives in `pkg/` but the package name is `pst` (imported as `pst "github.com/mooijtech/go-pst/v6/pkg"`).
+go-pst is a Go library for reading Microsoft Outlook PST/OST/PAB files (the PFF format). Module path is `github.com/msilvoso/go-pst/v6`; the library lives in `pkg/` but the package name is `pst` (imported as `pst "github.com/msilvoso/go-pst/v6/pkg"`).
 
 ## Commands
 

@@ -106,8 +106,8 @@ const (
 // Internal identifiers have blocks.
 //
 // References:
-// - https://github.com/mooijtech/go-pst/tree/master/docs#xblock
-// - https://github.com/mooijtech/go-pst/tree/master/docs#xxblock
+// - https://github.com/msilvoso/go-pst/tree/master/docs#xblock
+// - https://github.com/msilvoso/go-pst/tree/master/docs#xxblock
 func (file *File) GetBlocks(btreeNode BTreeNode) ([]BTreeNode, error) {
 	blockReader, err := file.GetBlockReader(btreeNode)
 

@@ -68,10 +68,16 @@ func (file *File) GetLocalDescriptorsFromIdentifier(localDescriptorsIdentifier I
 		return nil, eris.Wrap(err, "failed to get local descriptors node")
 	}
 
+	blockReader, err := file.GetBlockReader(localDescriptorsNode)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get block reader")
+	}
+
 	// TODO - Merge signature, level, entry count etc into one ReadAt
 	signature := make([]byte, 1)
 
-	if _, err = file.Reader.ReadAt(signature, localDescriptorsNode.FileOffset); err != nil {
+	if _, err = blockReader.ReadAt(signature, 0); err != nil {
 		return nil, eris.Wrap(err, "failed to read local descriptors signature")
 	} else if signature[0] != 2 {
 		return nil, ErrLocalDescriptorsSignatureInvalid
@@ -79,7 +85,7 @@ func (file *File) GetLocalDescriptorsFromIdentifier(localDescriptorsIdentifier I
 
 	localDescriptorsLevel := make([]byte, 1)
 
-	if _, err := file.Reader.ReadAt(localDescriptorsLevel, localDescriptorsNode.FileOffset+1); err != nil {
+	if _, err := blockReader.ReadAt(localDescriptorsLevel, 1); err != nil {
 		return nil, eris.Wrap(err, "failed to read local descriptors level")
 	} else if localDescriptorsLevel[0] > 0 {
 		// Haven't seen branch nodes yet.
@@ -97,7 +103,7 @@ func (file *File) GetLocalDescriptorsFromIdentifier(localDescriptorsIdentifier I
 
 	localDescriptorsEntryCount := make([]byte, 2)
 
-	if _, err := file.Reader.ReadAt(localDescriptorsEntryCount, localDescriptorsNode.FileOffset+2); err != nil {
+	if _, err := blockReader.ReadAt(localDescriptorsEntryCount, 2); err != nil {
 		return nil, eris.Wrap(err, "failed to get local descriptors entry count")
 	}
 
@@ -105,14 +111,14 @@ func (file *File) GetLocalDescriptorsFromIdentifier(localDescriptorsIdentifier I
 
 	switch file.FormatType {
 	case FormatTypeANSI:
-		localDescriptorsEntriesOffset = localDescriptorsNode.FileOffset + 4
+		localDescriptorsEntriesOffset = 4
 	default:
-		localDescriptorsEntriesOffset = localDescriptorsNode.FileOffset + 8
+		localDescriptorsEntriesOffset = 8
 	}
 
 	localDescriptorsEntries := make([]byte, binary.LittleEndian.Uint16(localDescriptorsEntryCount)*uint16(localDescriptorEntrySize))
 
-	if _, err := file.Reader.ReadAt(localDescriptorsEntries, localDescriptorsEntriesOffset); err != nil {
+	if _, err := blockReader.ReadAt(localDescriptorsEntries, localDescriptorsEntriesOffset); err != nil {
 		return nil, eris.Wrap(err, "failed to read local descriptors entries")
 	}
 

@@ -91,7 +91,7 @@ func (file *File) GetBTreeNodeEntryCount(btreeNode []byte) uint16 {
 	case FormatTypeUnicode:
 		return uint16(btreeNode[488])
 	case FormatTypeUnicode4k:
-		return binary.LittleEndian.Uint16(btreeNode[4056:4058]) // TODO - CHeck
+		return binary.LittleEndian.Uint16(btreeNode[4056:4058])
 	case FormatTypeANSI:
 		return uint16(btreeNode[496])
 	default:
@@ -120,7 +120,7 @@ func (file *File) GetBTreeNodeLevel(btreeNode []byte) uint8 {
 	case FormatTypeUnicode:
 		return btreeNode[491]
 	case FormatTypeUnicode4k:
-		return btreeNode[4062] // TODO - Check
+		return btreeNode[4061]
 	case FormatTypeANSI:
 		return btreeNode[499]
 	default:
@@ -136,7 +136,11 @@ type BTreeNode struct {
 	DataIdentifier             Identifier `json:"dataIdentifier"`
 	LocalDescriptorsIdentifier Identifier `json:"localDescriptorsIdentifier"`
 	Size                       uint16     `json:"size"`
-	NodeLevel                  uint8      `json:"nodeLevel"`
+	// InflatedSize is the uncompressed size of the block data.
+	// Only used by the Unicode 4k format (OST files), where the block data
+	// is zlib compressed when InflatedSize differs from Size.
+	InflatedSize uint16 `json:"inflatedSize"`
+	NodeLevel    uint8  `json:"nodeLevel"`
 }
 
 // NewBTreeNodeReader is used by the Heap-on-Node.
@@ -168,7 +172,9 @@ func (file *File) GetBTreeNodeRawEntries(btreeNodeOffset int64, callback func([]
 	case FormatTypeUnicode:
 		outputBuffer = make([]byte, 512)
 	case FormatTypeUnicode4k:
-		outputBuffer = make([]byte, 4056) // TODO - Check
+		// The entries are 4056 bytes, followed by the entry count, entry size
+		// and node level (read by the callers), within a 4096 byte page.
+		outputBuffer = make([]byte, 4096)
 	case FormatTypeANSI:
 		outputBuffer = make([]byte, 512)
 	default:
@@ -222,10 +228,11 @@ func (file *File) GetBTreeNodeEntries(btreeNodeOffset int64, btreeType BTreeType
 			} else if parentBTreeNodeLevel == 0 && btreeType == BTreeTypeBlock {
 				// Leaf block b-tree node.
 				btreeNodeEntries[i] = BTreeNode{
-					Identifier: GetBTreeNodeEntryIdentifier(btreeNodeEntryData, file.FormatType),
-					FileOffset: GetBTreeNodeEntryFileOffset(btreeNodeEntryData, false, file.FormatType),
-					Size:       GetBTreeNodeEntrySize(btreeNodeEntryData, file.FormatType),
-					NodeLevel:  parentBTreeNodeLevel,
+					Identifier:   GetBTreeNodeEntryIdentifier(btreeNodeEntryData, file.FormatType),
+					FileOffset:   GetBTreeNodeEntryFileOffset(btreeNodeEntryData, false, file.FormatType),
+					Size:         GetBTreeNodeEntrySize(btreeNodeEntryData, file.FormatType),
+					InflatedSize: GetBTreeNodeEntryInflatedSize(btreeNodeEntryData, file.FormatType),
+					NodeLevel:    parentBTreeNodeLevel,
 				}
 			}
 		}
@@ -351,6 +358,7 @@ func GetBTreeNodeEntryLocalDescriptorsIdentifier(btreeNodeEntryData []byte, form
 }
 
 // GetBTreeNodeEntrySize returns the size of the data in the block b-tree leaf node entry.
+// For the Unicode 4k format this is the stored (possibly compressed) size.
 // References "The b-tree entries".
 func GetBTreeNodeEntrySize(btreeNodeEntryData []byte, formatType FormatType) uint16 {
 	switch formatType {
@@ -358,6 +366,19 @@ func GetBTreeNodeEntrySize(btreeNodeEntryData []byte, formatType FormatType) uin
 		return binary.LittleEndian.Uint16(btreeNodeEntryData[8 : 8+2])
 	default:
 		return binary.LittleEndian.Uint16(btreeNodeEntryData[16 : 16+2])
+	}
+}
+
+// GetBTreeNodeEntryInflatedSize returns the inflated (uncompressed) size of the data
+// in the block b-tree leaf node entry.
+// Only the Unicode 4k format (OST files) supports zlib compressed blocks, the inflated size
+// directly follows the stored size. For other formats this equals GetBTreeNodeEntrySize.
+func GetBTreeNodeEntryInflatedSize(btreeNodeEntryData []byte, formatType FormatType) uint16 {
+	switch formatType {
+	case FormatTypeUnicode4k:
+		return binary.LittleEndian.Uint16(btreeNodeEntryData[18 : 18+2])
+	default:
+		return GetBTreeNodeEntrySize(btreeNodeEntryData, formatType)
 	}
 }
 

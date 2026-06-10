@@ -17,7 +17,10 @@
 package pst
 
 import (
+	"bytes"
+	"compress/zlib"
 	"encoding/binary"
+	"io"
 
 	"github.com/rotisserie/eris"
 )
@@ -38,18 +41,56 @@ func (file *File) GetBlockSize() (int, error) {
 }
 
 // GetBlockTrailerSize returns the size of a block trailer.
+// The Unicode 4k (OST) block trailer has 8 extra bytes containing the inflated (uncompressed) size.
 // References "Blocks".
 func (file *File) GetBlockTrailerSize() (int, error) {
 	switch file.FormatType {
 	case FormatTypeUnicode:
 		return 16, nil
 	case FormatTypeUnicode4k:
-		return 16, nil
+		return 24, nil
 	case FormatTypeANSI:
 		return 12, nil
 	default:
 		return 0, ErrFormatTypeUnsupported
 	}
+}
+
+// IsBlockCompressed returns true if the block data is zlib (DEFLATE) compressed.
+// Only the Unicode 4k format (OST files, Outlook 2013 and later) supports compression.
+// A block is compressed when its stored size differs from its inflated (uncompressed) size.
+func (file *File) IsBlockCompressed(btreeNode BTreeNode) bool {
+	return file.FormatType == FormatTypeUnicode4k && btreeNode.InflatedSize != 0 && btreeNode.InflatedSize != btreeNode.Size
+}
+
+// GetBlockReader returns a reader for the data of the block b-tree node,
+// transparently decompressing zlib compressed blocks (OST files, Outlook 2013 and later).
+// Decompression happens before decryption (see HeapOnNodeReader).
+func (file *File) GetBlockReader(btreeNode BTreeNode) (*io.SectionReader, error) {
+	if !file.IsBlockCompressed(btreeNode) {
+		return io.NewSectionReader(file.Reader, btreeNode.FileOffset, int64(btreeNode.Size)), nil
+	}
+
+	compressedData := make([]byte, btreeNode.Size)
+
+	if _, err := file.Reader.ReadAt(compressedData, btreeNode.FileOffset); err != nil {
+		return nil, eris.Wrap(err, "failed to read compressed block data")
+	}
+
+	zlibReader, err := zlib.NewReader(bytes.NewReader(compressedData))
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to create zlib reader")
+	}
+	defer zlibReader.Close()
+
+	blockData := make([]byte, btreeNode.InflatedSize)
+
+	if _, err := io.ReadFull(zlibReader, blockData); err != nil {
+		return nil, eris.Wrap(err, "failed to decompress block data")
+	}
+
+	return io.NewSectionReader(bytes.NewReader(blockData), 0, int64(btreeNode.InflatedSize)), nil
 }
 
 // BlockType represents a XBlock or XXBlock.
@@ -67,10 +108,16 @@ const (
 // References:
 // - https://github.com/mooijtech/go-pst/tree/master/docs#xblock
 // - https://github.com/mooijtech/go-pst/tree/master/docs#xxblock
-func (file *File) GetBlocks(btreeNodeHeapOnNodeOffset int64) ([]BTreeNode, error) {
+func (file *File) GetBlocks(btreeNode BTreeNode) ([]BTreeNode, error) {
+	blockReader, err := file.GetBlockReader(btreeNode)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get block reader")
+	}
+
 	data := make([]byte, 4)
 
-	if _, err := file.Reader.ReadAt(data, btreeNodeHeapOnNodeOffset); err != nil {
+	if _, err := blockReader.ReadAt(data, 0); err != nil {
 		return nil, eris.Wrap(err, "failed to read block data")
 	}
 
@@ -91,7 +138,7 @@ func (file *File) GetBlocks(btreeNodeHeapOnNodeOffset int64) ([]BTreeNode, error
 		// XBlock
 		blockIdentifiers := make([]byte, entryCount*identifierSize)
 
-		if _, err := file.Reader.ReadAt(blockIdentifiers, btreeNodeHeapOnNodeOffset+8); err != nil {
+		if _, err := blockReader.ReadAt(blockIdentifiers, 8); err != nil {
 			return nil, eris.Wrap(err, "failed to read block identifiers")
 		}
 
@@ -109,7 +156,7 @@ func (file *File) GetBlocks(btreeNodeHeapOnNodeOffset int64) ([]BTreeNode, error
 		// XXBlock
 		blockIdentifiers := make([]byte, entryCount*int(GetIdentifierSize(file.FormatType)))
 
-		if _, err := file.Reader.ReadAt(blockIdentifiers, btreeNodeHeapOnNodeOffset+8); err != nil {
+		if _, err := blockReader.ReadAt(blockIdentifiers, 8); err != nil {
 			return nil, eris.Wrap(err, "failed to read block identifiers")
 		}
 
@@ -122,7 +169,7 @@ func (file *File) GetBlocks(btreeNodeHeapOnNodeOffset int64) ([]BTreeNode, error
 			}
 
 			// Recursive.
-			blockBTreeNodeBlocks, err := file.GetBlocks(blockBTreeNode.FileOffset)
+			blockBTreeNodeBlocks, err := file.GetBlocks(blockBTreeNode)
 
 			if err != nil {
 				return nil, eris.Wrap(err, "failed to get blocks")
@@ -138,10 +185,16 @@ func (file *File) GetBlocks(btreeNodeHeapOnNodeOffset int64) ([]BTreeNode, error
 }
 
 // GetBlocksTotalSize returns the size of the external data referenced by the XBlock or XXBlock.
-func (file *File) GetBlocksTotalSize(nodeEntryHeapOnNodeOffset int64) (uint32, error) {
+func (file *File) GetBlocksTotalSize(btreeNode BTreeNode) (uint32, error) {
+	blockReader, err := file.GetBlockReader(btreeNode)
+
+	if err != nil {
+		return 0, eris.Wrap(err, "failed to get block reader")
+	}
+
 	blocksTotalSize := make([]byte, 4)
 
-	if _, err := file.Reader.ReadAt(blocksTotalSize, nodeEntryHeapOnNodeOffset+4); err != nil {
+	if _, err := blockReader.ReadAt(blocksTotalSize, 4); err != nil {
 		return 0, eris.Wrap(err, "failed to read total blocks size")
 	}
 

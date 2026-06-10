@@ -71,13 +71,13 @@ func (file *File) GetHeapOnNode(btreeNode BTreeNode) (*HeapOnNode, error) {
 	isInternal := btreeNode.Identifier&0x02 != 0
 
 	if isInternal {
-		blocks, err := file.GetBlocks(btreeNode.FileOffset)
+		blocks, err := file.GetBlocks(btreeNode)
 
 		if err != nil {
 			return nil, eris.Wrap(err, "failed to get blocks")
 		}
 
-		blocksTotalSize, err := file.GetBlocksTotalSize(btreeNode.FileOffset)
+		blocksTotalSize, err := file.GetBlocksTotalSize(btreeNode)
 
 		if err != nil {
 			return nil, eris.Wrap(err, "failed to get total blocks size")
@@ -87,8 +87,16 @@ func (file *File) GetHeapOnNode(btreeNode BTreeNode) (*HeapOnNode, error) {
 		blockReaderTotalSize := 0
 
 		for i, block := range blocks {
-			blockReaderTotalSize += int(block.Size)
-			blockReaders[i] = *NewBTreeNodeReader(block, file.Reader)
+			blockReader, err := file.GetBlockReader(block)
+
+			if err != nil {
+				return nil, eris.Wrap(err, "failed to get block reader")
+			}
+
+			// The total size refers to the inflated (uncompressed) data,
+			// which is what the block reader exposes.
+			blockReaderTotalSize += int(blockReader.Size())
+			blockReaders[i] = *blockReader
 		}
 
 		if blocksTotalSize != uint32(blockReaderTotalSize) {
@@ -98,7 +106,13 @@ func (file *File) GetHeapOnNode(btreeNode BTreeNode) (*HeapOnNode, error) {
 		return &HeapOnNode{Reader: NewHeapOnNodeReader(file.EncryptionType, blockReaders...)}, nil
 	}
 
-	return &HeapOnNode{Reader: NewHeapOnNodeReader(file.EncryptionType, *io.NewSectionReader(file.Reader, btreeNode.FileOffset, int64(btreeNode.Size)))}, nil
+	blockReader, err := file.GetBlockReader(btreeNode)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get block reader")
+	}
+
+	return &HeapOnNode{Reader: NewHeapOnNodeReader(file.EncryptionType, *blockReader)}, nil
 }
 
 // GetHeapOnNodeReaderFromHNID returns the Heap-on-Node reader from the specified HNID (heap or node identifier).

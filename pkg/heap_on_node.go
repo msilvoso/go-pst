@@ -144,11 +144,24 @@ func (file *File) GetHeapOnNodeReaderFromHID(hid Identifier, heapOnNodeReader He
 		return nil, ErrHeapOnNodeExternalNode
 	}
 
-	blockIndex := int(hid) >> 16
+	// The HID is a 32-bit value: 5-bit type, then the allocation index and block index.
+	// Unicode/ANSI: 11-bit allocation index, 16-bit block index.
+	// Unicode 4k (OST): 14-bit allocation index, 13-bit block index (see XstReader LayoutsU4K).
+	var blockIndex int
+	var allocationIndex int64
+
+	if file.FormatType == FormatTypeUnicode4k {
+		blockIndex = int(hid) >> 19
+		allocationIndex = (int64(hid) >> 5) & 0x3FFF
+	} else {
+		blockIndex = int(hid) >> 16
+		allocationIndex = int64((hid & 0xFFFF) >> 5)
+	}
+
 	blockOffset := int64(0)
 
 	if blockIndex > 0 {
-		if blockIndex > len(heapOnNodeReader.Blocks) {
+		if blockIndex >= len(heapOnNodeReader.Blocks) {
 			return nil, ErrBlockIndexNotFound
 		}
 
@@ -161,7 +174,6 @@ func (file *File) GetHeapOnNodeReaderFromHID(hid Identifier, heapOnNodeReader He
 		return nil, eris.Wrap(err, "failed to read page map offset")
 	}
 
-	allocationIndex := int64((hid & 0xFFFF) >> 5)
 	allocationOffset := (blockOffset + int64(binary.LittleEndian.Uint16(pageMapOffset))) + (2 * allocationIndex) + 2
 
 	startOffset := make([]byte, 2)

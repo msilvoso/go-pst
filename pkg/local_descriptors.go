@@ -88,8 +88,51 @@ func (file *File) GetLocalDescriptorsFromIdentifier(localDescriptorsIdentifier I
 	if _, err := blockReader.ReadAt(localDescriptorsLevel, 1); err != nil {
 		return nil, eris.Wrap(err, "failed to read local descriptors level")
 	} else if localDescriptorsLevel[0] > 0 {
-		// Haven't seen branch nodes yet.
-		return nil, ErrLocalDescriptorBranchNode
+		// SIBLOCK: an intermediate block whose SIENTRYs point to the SLBLOCKs
+		// containing the local descriptors.
+		// References "SIBLOCK", "SIENTRY (Intermediate Block Entry)".
+		var sientrySize uint8
+		var sientriesOffset int64
+
+		switch file.FormatType {
+		case FormatTypeANSI:
+			sientrySize = 8
+			sientriesOffset = 4
+		default:
+			sientrySize = 16
+			sientriesOffset = 8
+		}
+
+		sientryCount := make([]byte, 2)
+
+		if _, err := blockReader.ReadAt(sientryCount, 2); err != nil {
+			return nil, eris.Wrap(err, "failed to read SIENTRY count")
+		}
+
+		sientries := make([]byte, binary.LittleEndian.Uint16(sientryCount)*uint16(sientrySize))
+
+		if _, err := blockReader.ReadAt(sientries, sientriesOffset); err != nil {
+			return nil, eris.Wrap(err, "failed to read SIENTRY entries")
+		}
+
+		identifierSize := int(GetIdentifierSize(file.FormatType))
+
+		var localDescriptors []LocalDescriptor
+
+		for i := 0; i < int(binary.LittleEndian.Uint16(sientryCount)); i++ {
+			// An SIENTRY is the node identifier followed by the block identifier of an SLBLOCK.
+			blockIdentifier := GetIdentifierFromBytes(sientries[i*int(sientrySize)+identifierSize:(i+1)*int(sientrySize)], file.FormatType)
+
+			slBlockLocalDescriptors, err := file.GetLocalDescriptorsFromIdentifier(blockIdentifier)
+
+			if err != nil {
+				return nil, eris.Wrap(err, "failed to get local descriptors from SLBLOCK")
+			}
+
+			localDescriptors = append(localDescriptors, slBlockLocalDescriptors...)
+		}
+
+		return localDescriptors, nil
 	}
 
 	var localDescriptorEntrySize uint8

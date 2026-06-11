@@ -221,6 +221,12 @@ func (file *File) GetMessage(identifier Identifier) (*Message, error) {
 		return nil, eris.Wrap(err, "failed to get property context")
 	}
 
+	return file.newMessage(identifier, propertyContext, localDescriptors)
+}
+
+// newMessage creates a Message from the property context,
+// selecting the properties struct (properties.Message, properties.Appointment, ...) by message class.
+func (file *File) newMessage(identifier Identifier, propertyContext *PropertyContext, localDescriptors []LocalDescriptor) (*Message, error) {
 	var messageProperties msgp.Decodable
 
 	messageClassPropertyReader, err := propertyContext.GetPropertyReader(26, localDescriptors)

@@ -17,11 +17,16 @@
 package pst
 
 import (
-	"github.com/msilvoso/go-pst/v6/pkg/properties"
+	"encoding/binary"
 	"io"
 
+	"github.com/msilvoso/go-pst/v6/pkg/properties"
 	"github.com/rotisserie/eris"
 )
+
+// AttachMethodEmbeddedMessage (afEmbeddedMessage) indicates the attachment is an embedded message (.msg).
+// References [MS-OXCMSG]: PidTagAttachMethod.
+const AttachMethodEmbeddedMessage = 5
 
 // Attachment represents a message attachment.
 type Attachment struct {
@@ -308,6 +313,64 @@ func (message *Message) GetAttachmentIterator() (AttachmentIterator, error) {
 	return AttachmentIterator{
 		message: message,
 	}, nil
+}
+
+// IsEmbeddedMessage returns true if this attachment is an embedded message (.msg).
+func (attachment *Attachment) IsEmbeddedMessage() bool {
+	return attachment.GetAttachMethod() == AttachMethodEmbeddedMessage
+}
+
+// GetEmbeddedMessage returns the embedded message of this attachment, which can be
+// walked like any other message (properties, recipients and nested attachments).
+// The PtypObject value of PidTagAttachDataObject is the identifier of a subnode
+// which is a fully formed message, except that it is not located in the NBT and
+// has no parent folder.
+// References "PtypObject Properties", "Attachment Data".
+func (attachment *Attachment) GetEmbeddedMessage() (*Message, error) {
+	if !attachment.IsEmbeddedMessage() {
+		return nil, ErrAttachmentNotEmbeddedMessage
+	}
+
+	propertyReader, err := attachment.PropertyContext.GetPropertyReader(14081, attachment.LocalDescriptors)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get attachment object property reader")
+	}
+
+	// The PtypObject heap allocation is the subnode identifier (Nid) followed by the total object size (ulSize).
+	embeddedMessageIdentifier := make([]byte, 4)
+
+	if _, err := propertyReader.ReadAt(embeddedMessageIdentifier, 0); err != nil {
+		return nil, eris.Wrap(err, "failed to read embedded message identifier")
+	}
+
+	embeddedMessageLocalDescriptor, err := FindLocalDescriptor(Identifier(binary.LittleEndian.Uint32(embeddedMessageIdentifier)), attachment.LocalDescriptors)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to find embedded message local descriptor")
+	}
+
+	file := attachment.PropertyContext.File
+
+	embeddedMessageHeapOnNode, err := file.GetHeapOnNodeFromLocalDescriptor(embeddedMessageLocalDescriptor)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get embedded message Heap-on-Node")
+	}
+
+	embeddedMessageLocalDescriptors, err := file.GetLocalDescriptorsFromIdentifier(embeddedMessageLocalDescriptor.LocalDescriptorsIdentifier)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get embedded message local descriptors")
+	}
+
+	embeddedMessagePropertyContext, err := file.GetPropertyContext(embeddedMessageHeapOnNode)
+
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get embedded message property context")
+	}
+
+	return file.newMessage(embeddedMessageLocalDescriptor.Identifier, embeddedMessagePropertyContext, embeddedMessageLocalDescriptors)
 }
 
 // WriteTo writes the attachment to the specified io.Writer.

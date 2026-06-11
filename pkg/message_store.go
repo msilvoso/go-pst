@@ -34,3 +34,31 @@ func (file *File) GetMessageStore() (*PropertyContext, error) {
 
 	return file.GetPropertyContext(heapOnNode)
 }
+
+// DefaultCodePage (UTF-8) is used to decode String8 properties
+// when the message store doesn't record a code page.
+const DefaultCodePage = 65001
+
+// getMessageStoreCodePage returns the code page of the message store (PidTagCodePage)
+// or DefaultCodePage if not present.
+func (file *File) getMessageStoreCodePage() int {
+	messageStore, err := file.GetMessageStore()
+
+	if err != nil {
+		return DefaultCodePage
+	}
+
+	propertyReader, err := messageStore.GetPropertyReader(16381, nil)
+
+	if err != nil {
+		return DefaultCodePage
+	}
+
+	codePage, err := propertyReader.GetInteger32()
+
+	if err != nil || CodePageIdentifierToEncoding[int(codePage)] == "" {
+		return DefaultCodePage
+	}
+
+	return int(codePage)
+}

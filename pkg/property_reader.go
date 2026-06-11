@@ -77,7 +77,7 @@ func (propertyReader *PropertyReader) WriteMessagePackValue(writer *msgp.Writer)
 
 		return nil
 	case PropertyTypeString8:
-		value, err := propertyReader.GetString8(65001) // TODO - Get from called, this is UTF-8 for now.
+		value, err := propertyReader.GetString8(propertyReader.File.CodePage)
 
 		if err != nil {
 			return eris.Wrap(err, "failed to get string8")

@@ -132,7 +132,7 @@ func (folder *Folder) GetSubFolders() ([]Folder, error) {
 
 				if property.Type == PropertyTypeString8 {
 					// ANSI files store the folder name as String8.
-					folderName, err = propertyReader.GetString8(65001) // TODO - Get the code page from the message store, this is UTF-8 for now.
+					folderName, err = propertyReader.GetString8(folder.File.CodePage)
 				} else {
 					folderName, err = propertyReader.GetString()
 				}

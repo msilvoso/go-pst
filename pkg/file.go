@@ -32,6 +32,10 @@ type File struct {
 	NodeBTree      BTreeStore
 	BlockBTree     BTreeStore
 	NameToIDMap    *NameToIDMap
+	// CodePage identifies the encoding used to decode String8 properties (see CodePageIdentifierToEncoding).
+	// Initialized from the message store (PidTagCodePage) when present, defaulting to UTF-8.
+	// ANSI files usually don't record their code page; callers may set this field after New.
+	CodePage int
 }
 
 // Reader defines the file reader used by go-pst to support asynchronous I/O.
@@ -133,6 +137,7 @@ func NewFromReaderWithBTrees(reader Reader, nodeBTree BTreeStore, blockBTree BTr
 	}
 
 	pstFile.NameToIDMap = nameToIDMap
+	pstFile.CodePage = pstFile.getMessageStoreCodePage()
 
 	return pstFile, nil
 }

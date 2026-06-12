@@ -123,44 +123,8 @@ func main() {
         fmt.Printf("Unknown message type\n")
       }
 
-      attachmentIterator, err := message.GetAttachmentIterator()
-
-      if eris.Is(err, pst.ErrAttachmentsNotFound) {
-        // This message has no attachments.
-        continue
-      } else if err != nil {
+      if err := extractAttachments(message); err != nil {
         return err
-      }
-
-      // Iterate through attachments.
-      for attachmentIterator.Next() {
-        attachment := attachmentIterator.Value()
-
-        var attachmentOutputPath string
-
-        if attachment.GetAttachLongFilename() != "" {
-          attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachment.GetAttachLongFilename())
-        } else {
-          attachmentOutputPath = fmt.Sprintf("attachments/UNKNOWN_%d", attachment.Identifier)
-        }
-
-        attachmentOutput, err := os.Create(attachmentOutputPath)
-
-        if err != nil {
-          return err
-        }
-
-        if _, err := attachment.WriteTo(attachmentOutput); err != nil {
-          return err
-        }
-
-        if err := attachmentOutput.Close(); err != nil {
-          return err
-        }
-      }
-
-      if attachmentIterator.Err() != nil {
-        return attachmentIterator.Err()
       }
     }
 
@@ -170,6 +134,64 @@ func main() {
   }
 
   fmt.Printf("Time: %s\n", time.Since(startTime).String())
+}
+
+// extractAttachments writes the attachments of a message to the attachments
+// directory, recursing into embedded message attachments.
+func extractAttachments(message *pst.Message) error {
+  attachmentIterator, err := message.GetAttachmentIterator()
+
+  if eris.Is(err, pst.ErrAttachmentsNotFound) {
+    // This message has no attachments.
+    return nil
+  } else if err != nil {
+    return err
+  }
+
+  // Iterate through attachments.
+  for attachmentIterator.Next() {
+    attachment := attachmentIterator.Value()
+
+    if attachment.IsEmbeddedMessage() {
+      // Embedded message attachments (.msg) have no binary data to write;
+      // open the embedded message and extract its attachments instead.
+      embeddedMessage, err := attachment.GetEmbeddedMessage()
+
+      if err != nil {
+        return err
+      }
+
+      if err := extractAttachments(embeddedMessage); err != nil {
+        return err
+      }
+
+      continue
+    }
+
+    var attachmentOutputPath string
+
+    if attachment.GetAttachLongFilename() != "" {
+      attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachment.GetAttachLongFilename())
+    } else {
+      attachmentOutputPath = fmt.Sprintf("attachments/UNKNOWN_%d", attachment.Identifier)
+    }
+
+    attachmentOutput, err := os.Create(attachmentOutputPath)
+
+    if err != nil {
+      return err
+    }
+
+    if _, err := attachment.WriteTo(attachmentOutput); err != nil {
+      return err
+    }
+
+    if err := attachmentOutput.Close(); err != nil {
+      return err
+    }
+  }
+
+  return attachmentIterator.Err()
 }
 ```
 

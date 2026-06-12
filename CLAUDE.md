@@ -36,10 +36,10 @@ The code mirrors the three layers of the [MS-PST] spec (full spec in `docs/READM
 - `property_context.go` (PC, table type 188) and `table_context.go` (TC, table type 124, row matrix) — the two structures every object's properties come from. `property_reader.go` decodes typed property values.
 
 **Messaging layer** — semantics:
-- `message_store.go`, `folder.go`, `message.go`, `attachment.go` — folders are walked via hierarchy/contents TCs; messages and attachments expose iterators.
+- `message_store.go`, `folder.go`, `message.go`, `attachment.go` — folders are walked via hierarchy/contents TCs; messages and attachments expose iterators. Embedded message attachments (`AttachMethod` 5) store a PtypObject subnode descriptor instead of binary data: `WriteTo` refuses them with `ErrAttachmentIsEmbeddedMessage`; open them with `Attachment.GetEmbeddedMessage` and recurse.
 - `name_to_id_map.go` — named property resolution (node id 97).
 - `properties.go` + `pkg/properties/` — properties are decoded into protobuf-generated structs (`properties.Message`, `properties.Appointment`, …) selected by message class; getters are generated, not hand-written.
 
 **Conventions**: sentinel errors live in `errors.go` (prefixed `go-pst:`), wrapped with `eris.Wrap` for stack traces and matched with `eris.Is`. The OST 4k format is undocumented by Microsoft; the reference implementations are libpff, XstReader, and java-libpst (linked in README).
 
-**Test data**: `data/enron.pst` (Unicode), `data/32-bit.pst` (ANSI), `data/support.pst`. There is no 4k OST test file.
+**Test data**: `data/enron.pst` (Unicode), `data/32-bit.pst` (ANSI), `data/support.pst`. There is no 4k OST test file, and none of the bundled files contain embedded message attachments (all attachments are `AttachMethod` 1, by-value).

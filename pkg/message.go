@@ -235,7 +235,15 @@ func (file *File) newMessage(identifier Identifier, propertyContext *PropertyCon
 		fmt.Printf("Failed to get message class property reader, falling back to properties.Message: %+v\n", eris.New(err.Error()))
 		messageProperties = &properties.Message{}
 	} else {
-		messageClass, err := messageClassPropertyReader.GetString()
+		var messageClass string
+		var err error
+
+		if messageClassPropertyReader.Property.Type == PropertyTypeString8 {
+			// ANSI files store the message class as String8.
+			messageClass, err = messageClassPropertyReader.GetString8(file.CodePage)
+		} else {
+			messageClass, err = messageClassPropertyReader.GetString()
+		}
 
 		if err != nil {
 			fmt.Printf("Failed to get message class, falling back to properties.Message: %+v\n", eris.New(err.Error()))

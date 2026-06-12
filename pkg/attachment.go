@@ -211,6 +211,10 @@ func (file *File) GetAttachment(messageIdentifier Identifier) (*Attachment, erro
 
 	propertyContext, err := file.GetPropertyContext(attachmentsHeapOnNode)
 
+	if err != nil {
+		return nil, eris.Wrap(err, "failed to get property context")
+	}
+
 	attachment := &Attachment{
 		Identifier:       messageIdentifier,
 		PropertyContext:  propertyContext,

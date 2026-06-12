@@ -23,6 +23,7 @@ import (
 	"github.com/rotisserie/eris"
 	"golang.org/x/text/encoding"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,10 +145,18 @@ func extractAttachments(message *pst.Message) error {
 			continue
 		}
 
+		attachmentFilename, err := attachment.GetFilename()
+
+		if err != nil {
+			return err
+		}
+
 		var attachmentOutputPath string
 
-		if attachment.GetAttachLongFilename() != "" {
-			attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachment.GetAttachLongFilename())
+		if attachmentFilename != "" {
+			// Display names (used for email attachments) may contain path separators.
+			attachmentFilename = strings.ReplaceAll(attachmentFilename, "/", "_")
+			attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachmentFilename)
 		} else {
 			attachmentOutputPath = fmt.Sprintf("attachments/UNKNOWN_%d", attachment.Identifier)
 		}

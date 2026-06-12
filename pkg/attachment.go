@@ -19,6 +19,7 @@ package pst
 import (
 	"encoding/binary"
 	"io"
+	"strings"
 
 	"github.com/msilvoso/go-pst/v6/pkg/properties"
 	"github.com/rotisserie/eris"
@@ -313,6 +314,71 @@ func (message *Message) GetAttachmentIterator() (AttachmentIterator, error) {
 	return AttachmentIterator{
 		message: message,
 	}, nil
+}
+
+// GetDisplayName returns the display name of this attachment (PidTagDisplayName).
+// Email attachments (message/rfc822) are often stored with only a display name,
+// without PidTagAttachLongFilename or PidTagAttachFilename.
+// Returns an empty string if the property is absent.
+func (attachment *Attachment) GetDisplayName() (string, error) {
+	propertyReader, err := attachment.PropertyContext.GetPropertyReader(12289, attachment.LocalDescriptors)
+
+	if eris.Is(err, ErrPropertyNotFound) || eris.Is(err, ErrPropertyNoData) {
+		return "", nil
+	} else if err != nil {
+		return "", eris.Wrap(err, "failed to get display name property reader")
+	}
+
+	var displayName string
+
+	if propertyReader.Property.Type == PropertyTypeString8 {
+		// ANSI files store the display name as String8.
+		displayName, err = propertyReader.GetString8(attachment.PropertyContext.File.CodePage)
+	} else {
+		displayName, err = propertyReader.GetString()
+	}
+
+	if eris.Is(err, ErrPropertyNoData) {
+		return "", nil
+	} else if err != nil {
+		return "", eris.Wrap(err, "failed to read display name")
+	}
+
+	return displayName, nil
+}
+
+// GetFilename returns the best available filename for this attachment, trying
+// PidTagAttachLongFilename, PidTagAttachFilename and PidTagDisplayName in that
+// order. Email attachments (message/rfc822) usually carry only a display name;
+// when the name has no extension one is appended from PidTagAttachExtension,
+// or ".eml" for the message/rfc822 MIME tag.
+// Returns an empty string if the attachment has no name at all.
+func (attachment *Attachment) GetFilename() (string, error) {
+	if filename := attachment.GetAttachLongFilename(); filename != "" {
+		return filename, nil
+	}
+
+	if filename := attachment.GetAttachFilename(); filename != "" {
+		return filename, nil
+	}
+
+	displayName, err := attachment.GetDisplayName()
+
+	if err != nil || displayName == "" {
+		return "", err
+	}
+
+	extension := attachment.GetAttachExtension()
+
+	if extension == "" && strings.EqualFold(attachment.GetAttachMimeTag(), "message/rfc822") {
+		extension = ".eml"
+	}
+
+	if extension != "" && !strings.HasSuffix(strings.ToLower(displayName), strings.ToLower(extension)) {
+		displayName += extension
+	}
+
+	return displayName, nil
 }
 
 // IsEmbeddedMessage returns true if this attachment is an embedded message (.msg).

@@ -46,6 +46,7 @@ import (
   "github.com/rotisserie/eris"
   "golang.org/x/text/encoding"
   "os"
+  "strings"
   "time"
 
   charsets "github.com/emersion/go-message/charset"
@@ -168,10 +169,20 @@ func extractAttachments(message *pst.Message) error {
       continue
     }
 
+    // GetFilename falls back to the display name for attachments without a
+    // filename, such as attached emails (message/rfc822), and appends ".eml".
+    attachmentFilename, err := attachment.GetFilename()
+
+    if err != nil {
+      return err
+    }
+
     var attachmentOutputPath string
 
-    if attachment.GetAttachLongFilename() != "" {
-      attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachment.GetAttachLongFilename())
+    if attachmentFilename != "" {
+      // Display names (used for email attachments) may contain path separators.
+      attachmentFilename = strings.ReplaceAll(attachmentFilename, "/", "_")
+      attachmentOutputPath = fmt.Sprintf("attachments/%d-%s", attachment.Identifier, attachmentFilename)
     } else {
       attachmentOutputPath = fmt.Sprintf("attachments/UNKNOWN_%d", attachment.Identifier)
     }

@@ -374,7 +374,14 @@ func (attachment *Attachment) GetEmbeddedMessage() (*Message, error) {
 }
 
 // WriteTo writes the attachment to the specified io.Writer.
+// Returns ErrAttachmentIsEmbeddedMessage for embedded message attachments:
+// their PidTagAttachDataObject value is a PtypObject subnode descriptor,
+// not the attachment data (see GetEmbeddedMessage).
 func (attachment *Attachment) WriteTo(writer io.Writer) (int64, error) {
+	if attachment.IsEmbeddedMessage() {
+		return 0, ErrAttachmentIsEmbeddedMessage
+	}
+
 	attachmentReader, err := attachment.PropertyContext.GetPropertyReader(14081, attachment.LocalDescriptors)
 
 	if eris.Is(err, ErrPropertyNoData) {

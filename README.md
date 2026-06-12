@@ -12,9 +12,6 @@
   <a href="https://github.com/msilvoso/go-pst/blob/master/LICENSE.txt">
       <img src="https://img.shields.io/badge/license-Apache%202-blue.svg?style=flat-square">
   </a>
-  <a href="https://github.com/msilvoso/go-pst/issues">
-    <img src="https://img.shields.io/github/issues/mooijtech/go-pst.svg?style=flat-square">
-  </a>
   <a href="https://github.com/msilvoso/go-pst">
       <img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat-square">
   </a>
@@ -29,6 +26,10 @@
 **go-pst** is a library for reading PST files (written in Go/Golang).
 
 The PFF (Personal Folder File) and OFF (Offline Folder File) format is used to store Microsoft Outlook e-mails, appointments and contacts. The PST (Personal Storage Table), OST (Offline Storage Table) and PAB (Personal Address Book) file format consist of the PFF format.
+
+The upstream repo no longer appears to be maintained, and this served as a good test case for Claude Fable.
+
+This fork adds OST support and includes several bug fixes.
 
 ## Usage
 
@@ -223,9 +224,3 @@ This project is licensed under the [Apache License 2.0]().
 - [libpff](https://github.com/libyal/libpff)
 - [XstReader](https://github.com/Dijji/XstReader)
 - [PANhunt](https://github.com/Dionach/PANhunt/blob/master/pst.py)
-
-## Contact
-
-Feel free to contact me if you have any questions.<br/>
-**Name**: Marten Mooij<br/>
-**Email**: info@mooijtech.com<br/>
